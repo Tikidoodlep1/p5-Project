@@ -92,6 +92,7 @@ class character {
 		this.momentum.add((0-this.momentum.x)/8, (0-this.momentum.y)/8);
 	}
 
+	//Momentum is used to make movement look more realistic, so you speed up to a max speed and slow down from a max speed
 	addMomentum(x, y) {
 		this.momentum.add(x, y);
 		this.momentum.limit(this.maxSpeed);
