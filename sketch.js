@@ -1,10 +1,10 @@
 class hitbox {
 	//Hitboxes
-	constructor(x, y, width, height, canPass, isCharacterHitbox, character, isStaticHitbox) {
+	constructor(x, y, xSize, ySize, canPass, isCharacterHitbox, character, isStaticHitbox) {
 		this.x = x;
 		this.y = y;
-		this.width = width;
-		this.height = height;
+		this.width = xSize;
+		this.height = ySize;
 		this.canPass = canPass;
 		//This hitboxes index in the global hitbox array for removal and checking that it isn't colliding with itself
 		this.index = hitboxes.length;
@@ -24,10 +24,17 @@ class hitbox {
 	checkCollision() {
 		//If there is a collision between ANY two hitboxes that exist
 		for(let i = 0; i < hitboxes.length; i++) {
+			//if either hitbox doesn't exist, dont check collision then? \_'-'_/
+			if(typeof this === null || typeof this === undefined || typeof hitboxes[i] === null || typeof hitboxes[i] === undefined) {
+				continue;
+			}
+
 			//Don't check hitboxes that don't move, they will never be a collider, just a collidee
 			if(hitboxes[i].isStaticHitbox) {
-				return;
+				//Continue means to skip the rest of the code and go to the next cycle of the loop
+				continue;
 			}
+
 			/*
 			* Here we are checking the following in this order:
 			* if the hitbox colliding here is not itself
@@ -37,14 +44,15 @@ class hitbox {
 			* if there is a collision on the bottom side of the hitbox
 			*/
 			if(i != this.index) {
-				if(hitboxes[i].x+hitboxes[i].width > this.x && hitboxes[i].x < this.x+this.width && hitboxes[i].y+hitboxes[i].height > this.y && hitboxes[i].y < this.y+1)  {
+				if(hitboxes[i].x+hitboxes[i].width > this.x && hitboxes[i].x < this.x+this.width && hitboxes[i].y+hitboxes[i].height > this.y && hitboxes[i].y < this.y)  {
 					this.onCollision(hitboxes[i], TOP_SIDE);
-				}else if(hitboxes[i].x+hitboxes[i].width > this.x && hitboxes[i].x < this.x+1 && hitboxes[i].y+hitboxes[i].height > this.y && hitboxes[i].y < this.y+this.height) {
+				}else if(hitboxes[i].x+hitboxes[i].width > this.x && hitboxes[i].x < this.x+this.width && hitboxes[i].y+hitboxes[i].height > this.y+this.height-1 && hitboxes[i].y < this.y+this.height) {
+					this.onCollision(hitboxes[i], BOTTOM_SIDE);
+				}
+				if(hitboxes[i].x+hitboxes[i].width > this.x && hitboxes[i].x < this.x+1 && hitboxes[i].y+hitboxes[i].height > this.y && hitboxes[i].y < this.y+this.height) {
 					this.onCollision(hitboxes[i], LEFT_SIDE);
 				}else if(hitboxes[i].x+hitboxes[i].width-1 > this.x+this.width && hitboxes[i].x < this.x+this.width && hitboxes[i].y+hitboxes[i].height > this.y && hitboxes[i].y < this.y+this.height) {
 					this.onCollision(hitboxes[i], RIGHT_SIDE);
-				}else if(hitboxes[i].x+hitboxes[i].width > this.x && hitboxes[i].x < this.x+this.width && hitboxes[i].y+hitboxes[i].height > this.y+this.height-1 && hitboxes[i].y < this.y+this.height) {
-					this.onCollision(hitboxes[i], BOTTOM_SIDE);
 				}
 			}
 		}
@@ -61,28 +69,85 @@ class hitbox {
 			}
 		}
 	}
+
+	//Remove this hitbox from the hitboxes array
+	delete() {
+		hitboxes[this.index] = null;
+	}
+}
+
+class hurtbox {
+	constructor(x, y, r, attachedHitboxIndex) {
+		this.x = x;
+		this.y = y;
+		this.radius = r;
+		this.attachedHitboxIndex = attachedHitboxIndex;
+	}
+
+	checkCollision() {
+		for(let i = 0; i < hitboxes.length; i++) {
+			if(i != this.attachedHitboxIndex) {
+				if(dist(hitboxes[i].x + hitboxes[i].width / 2, hitboxes[i].y + hitboxes[i].height / 2, this.x + this.radius, this.y + this.radius) > this.radius) {
+					this.onCollision(hitboxes[i]);
+				}
+			}
+		}
+	}
+
+	onCollision(collisionHitbox) {
+		if(collisionHitbox.isCharacterHitbox) {
+			console.log("Hit " + collisionHitbox.character.name + "!");
+		}
+	}
+}
+
+class npc {
+	constructor(character, isFriendly) {
+		this.character = character;
+		this.isFriendly = isFriendly;
+		this.idealDist;
+	}
+
+	setEnemyParams(idealDist) {
+		this.idealDist = idealDist;
+		return this;
+	}
 }
 
 class character {
 	//All Characters should use this base
-	constructor(name, sprite, spriteLocation, canMelee, canRange, startVector, xSize, ySize, maxSpeed) {
+	constructor(name, sprite, spriteLocation, canMelee, canRange, startVector, xSize, ySize, maxSpeed, shouldCameraFollow) {
 		this.name = name;
 		this.sprite = sprite;
 		this.spriteLocation = spriteLocation;
 		this.canMelee = canMelee;
 		this.canRange = canRange;
+		this.doingMelee = false;
+		this.doingRanged = false;
+		this.attackFrames = 0;
 		this.maxSpeed = maxSpeed;
+		this.xSize = xSize;
+		this.ySize = ySize;
 		//Keep one vector for movement, and one for momentum (for slowing down, speeding up, etc.)
 		this.pos = startVector;
 		this.momentum = new p5.Vector(0, 0);
+		this.facing = 0;
+		this.hurtbox = null;
+
 		//character hitbox
-		this.hitbox = new hitbox(this.pos.x - (xSize/2), this.pos.y - (ySize/2), xSize, ySize, false, true, this, false);
+		this.hitbox = new hitbox(this.pos.x - (xSize/2) + backgroundOffsetX, this.pos.y - (ySize/2) + backgroundOffsetY, xSize, ySize, false, true, this, false);
+		//should the camera follow this character
+		this.shouldCameraFollow = shouldCameraFollow;
 	}
 
 	move(x, y) {
 		//set the absolute location of the hitbox, then move the character pos
 		this.hitbox.setHitboxLoc(this.pos.x + x, this.pos.y + y);
+		this.facing = atan2(this.pos.x, this.pos.y) - atan2(x, y);
 		this.pos.add(x, y);
+		if(this.shouldCameraFollow) {
+			mainCamera.updateCameraMovement(this.pos.x + (this.xSize/2), this.pos.y + (this.ySize/2))
+		}
 	}
 
 	slowDown() {
@@ -96,6 +161,40 @@ class character {
 	addMomentum(x, y) {
 		this.momentum.add(x, y);
 		this.momentum.limit(this.maxSpeed);
+	}
+
+	performAttack() {
+		if(this.doingMelee) {
+			let rotAngle = (this.attackFrames + 5) / 15;
+			if(this.hurtbox == null) {
+				this.hurtbox = new hurtbox(this.pos.x + (this.xSize/2) + backgroundOffsetX + (70 * cos(this.facing + rotAngle)), this.pos.y + (this.ySize/2) + backgroundOffsetY + (70 * sin(this.facing + rotAngle)), this.xSize / 2, this.hitbox.index);
+			}
+			push();
+			fill(255, 0, 0, 255);
+			ellipse(this.pos.x + (this.xSize/2) + backgroundOffsetX + (70 * cos(this.facing + rotAngle)), this.pos.y + (this.ySize/2) + backgroundOffsetY + (70 * sin(this.facing + rotAngle)), this.xSize / 2);
+			pop();
+			this.attackFrames--;
+			if(this.attackFrames <= 0) {
+				this.doingMelee = false;
+			}
+			this.hurtbox.checkCollision();
+		}
+	}
+}
+
+class gameCamera {
+	constructor(x, y) {
+		this.x = x;
+		this.y = y;
+	}
+
+	updateCameraMovement(x, y) {
+		if(this.x != x || this.y != y) {
+			backgroundOffsetX += this.x - x;
+			backgroundOffsetY += this.y - y;
+			this.x = x;
+			this.y = y;
+		}
 	}
 }
 
@@ -111,19 +210,30 @@ const aKey = 65;
 const sKey = 83;
 const dKey = 68;
 const spaceKey = 32;
+
+//use canvas size / 2 for width and height
+const mainCamera = new gameCamera(1536/2, 864/2);
+
 //Keep an array of every existing hitbox for checking collision. If a hitbox gets deleted, it MUST be removed from this.
 let hitboxes = [];
+//These variables should be used for every object X and Y position to account for camera movement
+let backgroundOffsetX = 0;
+let backgroundOffsetY = 0;
+
 //the player object
-let player = new character("Player", -1, -1, true, true, new p5.Vector(150, 150), 50, 50, 4.0);
-let door = new hitbox(400, 400, 400, 400, false, false, null, true);
+let player = new character("Player", -1, -1, true, true, new p5.Vector(150, 150), 50, 50, 4.0, true);
+let door = new hitbox(400 + backgroundOffsetX, 400 + backgroundOffsetY, 400, 400, false, false, null, true);
+let enemy1 = new npc(new character("enemy1", -1, -1, false, true, new p5.Vector(300, 180), 120, 120, 0.0, false), false).setEnemyParams(80);
+
+let gameDifficulty = "easy";
 
 function setup() {
-  createCanvas(1920, 1080);
-  colorMode(RGB, 255);
-  frameRate(60);
-  ellipseMode(CENTER);
-  rectMode(CORNERS);
-  console.log(hitboxes);
+	let cnv = createCanvas(1536, 864);
+	cnv.mousePressed(onMouseClick);
+	colorMode(RGB, 255);
+	frameRate(60);
+	ellipseMode(CENTER);
+	rectMode(CORNERS);
 }
 
 function draw() {
@@ -131,18 +241,30 @@ function draw() {
 	//Check if the player should be moving
   	checkShouldMove();
   	//This shows the "door" hitbox for collision testing
- 	rect(400, 400, 800, 800);
+ 	rect(400 + backgroundOffsetX, 400 + backgroundOffsetY, 800 + backgroundOffsetX, 800 + backgroundOffsetY);
   	//drawing the "player"
- 	ellipse(player.pos.x + 25, player.pos.y + 25, 50, 50);
+ 	ellipse(player.pos.x + 25 + backgroundOffsetX, player.pos.y + 25 + backgroundOffsetY, 50, 50);
+
+ 	ellipse(enemy1.character.pos.x + backgroundOffsetX, enemy1.character.pos.y + backgroundOffsetY, 120, 120);
  	//For each existing hitbox, check if it's colliding with anything
  	for(let i = 0; i < hitboxes.length; i++) {
  		hitboxes[i].checkCollision();
+
+ 		if(hitboxes[i].isCharacterHitbox) {
+ 			hitboxes[i].character.performAttack();
+ 		}
  	}
- 	
 }
 
 function keyPressed() {
 	//console.log(keyCode);
+}
+
+function onMouseClick() {
+	if(player.canMelee && mouseButton === LEFT && !(player.attackFrames > 0)) {
+		player.doingMelee = true;
+		player.attackFrames = 10;
+	}
 }
 
 function checkShouldMove() {
