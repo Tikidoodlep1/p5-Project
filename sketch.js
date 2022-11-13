@@ -80,10 +80,10 @@ class hitbox {
 }
 
 class hurtbox {
-	constructor(x, y, r, attachedHitboxIndex, onCollide) {
+	constructor(x, y, d, attachedHitboxIndex, onCollide) {
 		this.x = x;
 		this.y = y;
-		this.radius = r;
+		this.diameter = d;
 		this.attachedHitboxIndex = attachedHitboxIndex;
 		this.onCollide = onCollide;
 	}
@@ -97,14 +97,13 @@ class hurtbox {
 		if(debugMode) {
 			push();
 			fill(255, 0, 255, 0);
-			ellipse(this.x, this.y, this.radius);
+			ellipse(this.x, this.y, this.diameter + 10);
 			pop();
 		}
 
 		for(let i = 0; i < hitboxes.length; i++) {
 			if(i != this.attachedHitboxIndex) {				
-				if(dist(hitboxes[i].x + hitboxes[i].width / 2, hitboxes[i].y + hitboxes[i].height / 2, this.x + this.radius, this.y + this.radius) < (hitboxes[i].width / 2) + this.radius) {
-					//this.onCollision(hitboxes[i]);
+				if(dist(hitboxes[i].x + (hitboxes[i].width / 2), hitboxes[i].y + (hitboxes[i].height / 2), this.x + (this.diameter / 2), this.y + (this.diameter / 2)) < (hitboxes[i].width / 2) + (this.diameter / 2) ) {
 					this.onCollide(hitboxes[i]);
 				}
 			}
