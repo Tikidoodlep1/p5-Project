@@ -102,12 +102,27 @@ class hurtbox {
 		}
 
 		for(let i = 0; i < hitboxes.length; i++) {
-			if(i != this.attachedHitboxIndex) {				
-				if(dist(hitboxes[i].x + (hitboxes[i].width / 2), hitboxes[i].y + (hitboxes[i].height / 2), this.x + (this.diameter / 2), this.y + (this.diameter / 2)) < (hitboxes[i].width / 2) + (this.diameter / 2) ) {
+			if(hitboxes[i] == null || hitboxes[i] == undefined) {
+				continue;
+			}
+
+			if(i != this.attachedHitboxIndex) {
+				if(dist(this.x + (this.diameter / 2), this.y + (this.diameter / 2), hitboxes[i].x + (hitboxes[i].width / 2), hitboxes[i].y + (hitboxes[i].height / 2)) <= (hitboxes[i].width + this.diameter / 2) ) {
 					this.onCollide(hitboxes[i]);
 				}
 			}
 		}
+	}
+}
+
+class projectile {
+	constructor(startX, startY, angle, speed, shouldDieOnHit, onHit) {
+		this.x = startX;
+		this.y = startY;
+		this.angle = angle;
+		this.speedd = speed;
+		this.shouldDieOnHit = shouldDieOnHit;
+		this.onHit = onHit;
 	}
 }
 
@@ -177,7 +192,7 @@ class character {
 	performAttack() {
 		if(this.doingMelee) {
 			//rotAngle is based on the frame that we're currently playing. In this case, it's used to determine the "rotation" of the hurtbox in regards to the attacker
-			let rotAngle = (this.attackFrames + 5) / 15;
+			let rotAngle = (this.attackFrames + 9) / 15;
 			//if the hurtbox is currently null, make one
 			if(this.hurtbox == null) {
 				this.hurtbox = new hurtbox(this.pos.x + (this.xSize/2) + backgroundOffsetX + (70 * cos(this.facing + rotAngle)), this.pos.y + (this.ySize/2) + backgroundOffsetY + (70 * sin(this.facing + rotAngle)), this.xSize / 2, this.hitbox.index,
@@ -251,11 +266,13 @@ let backgroundOffsetY = 0;
 let baseCollision = function(collisionHitbox, direction) {
 		//We want to check if the collided hitbox is used for a character and if both are unpassable. If so, we need to modify character movement
 		if(collisionHitbox.isCharacterHitbox && !this.canPass && !collisionHitbox.canPass) {
-			//If we're running into the top or bottom, dont cancel the y movement, other wise we're running into the left or right sides and need to cancel the x movement
+			//If we're running into the top or bottom, cancel the y movement, otherwise we're running into the left or right sides and need to cancel the x movement
 			if(direction == TOP_SIDE || direction == BOTTOM_SIDE) {
 				collisionHitbox.character.pos.add(0, 0-collisionHitbox.character.momentum.y);
+				collisionHitbox.character.momentum.set(collisionHitbox.character.momentum.x, 0);
 			}else {
 				collisionHitbox.character.pos.add(0-collisionHitbox.character.momentum.x, 0);
+				collisionHitbox.character.momentum.set(0, collisionHitbox.character.momentum.y);
 			}
 		}
 	}
@@ -263,8 +280,9 @@ let baseCollision = function(collisionHitbox, direction) {
 //the player object
 let player = new character("Player", -1, -1, true, true, new p5.Vector(150, 150), 50, 50, 4.0, true);
 let door = new hitbox(400 + backgroundOffsetX, 400 + backgroundOffsetY, 400, 400, false, false, null, true, baseCollision);
-let enemy1 = new npc(new character("enemy1", -1, -1, false, true, new p5.Vector(300, 180), 120, 120, 0.0, false), false).setEnemyParams(80);
+let enemy1 = new npc(new character("enemy1", -1, -1, false, true, new p5.Vector(300, 180), 100, 100, 0.0, false), false).setEnemyParams(80);
 
+//currently unused
 let gameDifficulty = "easy";
 
 function setup() {
@@ -285,7 +303,7 @@ function draw() {
   	//drawing the "player"
  	ellipse(player.pos.x + 25 + backgroundOffsetX, player.pos.y + 25 + backgroundOffsetY, 50, 50);
 
- 	ellipse(enemy1.character.pos.x + backgroundOffsetX, enemy1.character.pos.y + backgroundOffsetY, 120, 120);
+ 	ellipse(enemy1.character.pos.x + backgroundOffsetX, enemy1.character.pos.y + backgroundOffsetY, 100, 100);
  	//For each existing hitbox, check if it's colliding with anything
  	for(let i = 0; i < hitboxes.length; i++) {
  		hitboxes[i].checkCollision();
