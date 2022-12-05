@@ -35,7 +35,7 @@ class hitbox {
 		
 		//If there is a collision between ANY two hitboxes that exist
 		for(let i = 0; i < hitboxes.length; i++) {
-			//if either hitbox doesn't exist, dont check collision then? -\_'-'_/-
+			//if either hitbox doesn't exist, dont check collision then -\_'-'_/-
 			if(typeof this === null || typeof this === undefined || typeof hitboxes[i] === null || typeof hitboxes[i] === undefined) {
 				continue;
 			}
@@ -86,6 +86,8 @@ class hurtbox {
 		this.diameter = d;
 		this.attachedHitboxIndex = attachedHitboxIndex;
 		this.onCollide = onCollide;
+		this.index = hurtboxes.length;
+		this.hurtboxes[index] = this;
 	}
 
 	setLoc(x, y) {
@@ -116,13 +118,20 @@ class hurtbox {
 }
 
 class projectile {
-	constructor(startX, startY, angle, speed, shouldDieOnHit, onHit) {
+	constructor(startX, startY, diameter, angle, speed, onHit) {
 		this.x = startX;
 		this.y = startY;
-		this.angle = angle;
-		this.speedd = speed;
-		this.shouldDieOnHit = shouldDieOnHit;
+		this.diameter = diameter;
+		this.momentum = p5.Vector.fromAngle(angle);
+		this.speed = speed;
 		this.onHit = onHit;
+		this.hurtbox = new hurtbox(startX, startY, diameter, -1, onHit);
+	}
+
+	move() {
+		this.x += this.momentum.x;
+		this.y += this.momentum.y;
+		this.hurtbox.setLoc(this.x, this.y);
 	}
 }
 
@@ -131,11 +140,26 @@ class npc {
 		this.character = character;
 		this.isFriendly = isFriendly;
 		this.idealDist;
+		this.path;
 	}
 
 	setEnemyParams(idealDist) {
 		this.idealDist = idealDist;
+		this.angle;
 		return this;
+	}
+
+	update() {
+		if(!this.isFriendly) {
+			let angleToPlayer = atan( (this.character.pos.y - player.pos.y) / (this.character.pos.x - player.pos.x) );
+			if(angleToPlayer > PI/2 && angleToPlayer < 0) {
+				this.character.momentum.add(0.1, 0.0);
+			}else if(angleToPlayer > PI/2 && angleToPlayer < 0) {
+				this.character.momentum.add(0.1, 0.0);
+			}
+			
+			this.character.move()
+		}
 	}
 }
 
@@ -209,7 +233,7 @@ class character {
 			ellipse(this.pos.x + (this.xSize/2) + backgroundOffsetX + (70 * cos(this.facing + rotAngle)), this.pos.y + (this.ySize/2) + backgroundOffsetY + (70 * sin(this.facing + rotAngle)), this.xSize / 2);
 			pop();
 			this.hurtbox.setLoc(this.pos.x + (this.xSize/2) + backgroundOffsetX + (70 * cos(this.facing + rotAngle)), this.pos.y + (this.ySize/2) + backgroundOffsetY + (70 * sin(this.facing + rotAngle)) );
-			this.hurtbox.checkCollision();
+			//this.hurtbox.checkCollision();
 			this.attackFrames--;
 			if(this.attackFrames <= 0) {
 				this.doingMelee = false;
@@ -259,6 +283,7 @@ let debugMode = false;
 
 //Keep an array of every existing hitbox for checking collision. If a hitbox gets deleted, it MUST be removed from this.
 let hitboxes = [];
+let hurtboxes = [];
 //These variables should be used for every object X and Y position to account for camera movement
 let backgroundOffsetX = 0;
 let backgroundOffsetY = 0;
@@ -313,6 +338,10 @@ function draw() {
  		}
  	}
 
+ 	for(let i = 0; i < hurtboxes.length; i++) {
+ 		hurtboxes[i].checkCollision();
+ 	}
+
  	if(debugMode) {
  		push();
  		textSize(42);
@@ -335,6 +364,8 @@ function onMouseClick() {
 		player.doingMelee = true;
 		player.attackFrames = 7;
 	}
+
+	//Write canRangedAttack code here :)
 }
 
 function checkShouldMove() {
