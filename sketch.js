@@ -28,7 +28,7 @@ class hitbox {
 	drawStaticHitbox() {
 		push();
 		noStroke();
-		fill(255, 255, 255, 255);
+		fill(160, 160, 160, 255);
 		rect(this.x, this.y, this.x + this.width, this.y + this.height);
 		pop();
 	}
@@ -36,7 +36,7 @@ class hitbox {
 	checkCollision() {
 		if(debugMode) {
 			push();
-			fill(255, 0, 255, 0);
+			fill(0, 0, 0, 0);
 			rect(this.x, this.y, this.x + this.width, this.y + this.height);
 			pop();
 		}
@@ -44,7 +44,7 @@ class hitbox {
 		//If there is a collision between ANY two hitboxes that exist
 		for(let i = 0; i < hitboxes.length; i++) {
 			//if either hitbox doesn't exist, dont check collision then -\_'-'_/-
-			if(typeof this === null || typeof this === undefined || typeof hitboxes[i] === null || typeof hitboxes[i] === undefined) {
+			if(this == null || hitboxes[i] == null) {
 				continue;
 			}
 
@@ -84,6 +84,7 @@ class hitbox {
 	//Remove this hitbox from the hitboxes array
 	delete() {
 		hitboxes[this.index] = null;
+		delete this;
 	}
 }
 
@@ -106,7 +107,7 @@ class hurtbox {
 	checkCollision() {
 		if(debugMode) {
 			push();
-			fill(255, 0, 255, 0);
+			fill(0, 0, 0, 0);
 			ellipse(this.x, this.y, this.diameter + 10);
 			pop();
 		}
@@ -127,26 +128,27 @@ class hurtbox {
 	//Remove this hurtbox from the hitboxes array
 	delete() {
 		hurtboxes[this.index] = null;
+		delete this;
 	}
 }
 
-class projectile {
-	constructor(startX, startY, diameter, angle, speed, onHit) {
-		this.x = startX;
-		this.y = startY;
-		this.diameter = diameter;
-		this.momentum = p5.Vector.fromAngle(angle);
-		this.speed = speed;
-		this.onHit = onHit;
-		this.hurtbox = new hurtbox(startX, startY, diameter, -1, onHit);
-	}
+// class projectile {
+// 	constructor(startX, startY, diameter, angle, speed, onHit) {
+// 		this.x = startX;
+// 		this.y = startY;
+// 		this.diameter = diameter;
+// 		this.momentum = p5.Vector.fromAngle(angle);
+// 		this.speed = speed;
+// 		this.onHit = onHit;
+// 		this.hurtbox = new hurtbox(startX, startY, diameter, -1, onHit);
+// 	}
 
-	move() {
-		this.x += this.momentum.x;
-		this.y += this.momentum.y;
-		this.hurtbox.setLoc(this.x, this.y);
-	}
-}
+// 	move() {
+// 		this.x += this.momentum.x;
+// 		this.y += this.momentum.y;
+// 		this.hurtbox.setLoc(this.x, this.y);
+// 	}
+// }
 
 class npc {
 	constructor(character, isFriendly) {
@@ -167,14 +169,18 @@ class npc {
 
 	drawEnemyAsCircle() {
 		push();
-		fill(200, 0, 55, 255);
+		fill(165, 25, 55, 255);
 		ellipse(this.character.pos.x + (this.character.xSize / 2) + backgroundOffsetX, this.character.pos.y + (this.character.ySize / 2) + backgroundOffsetY, this.character.xSize, this.character.ySize);
+		stroke(255, 0, 0);
+		strokeWeight(3);
+		line(this.character.pos.x + backgroundOffsetX, this.character.pos.y + backgroundOffsetY - 5, this.character.pos.x + (map(this.character.health, 0, this.character.maxHealth, 0, this.character.xSize)) + backgroundOffsetX, this.character.pos.y + backgroundOffsetY - 5);
 		pop();
 	}
 
 	//Remove this npc from the npcs array
 	delete() {
-		npcs[this.index] = null;
+		npcs[this.npcIndex] = null;
+		delete this;
 	}
 
 	update() {
@@ -190,16 +196,15 @@ class npc {
 			let playerDist = dist(this.character.pos.x + (this.character.xSize / 2), this.character.pos.y + (this.character.ySize / 2), player.pos.x + (player.xSize / 2), player.pos.y + (player.ySize / 2));
 
 			if(playerDist > 2000) {
+				console.log(this.character.name + " was defeated!");
 				this.character.defeated();
 				this.delete();
 				return;
 			}
 
 			if(playerDist <= this.idealDist) {
-				console.log("Angle minus: " + (angleToPlayer - (PI / 2)) + ", Angle plus: " + (angleToPlayer + (PI / 2)) + ", Facing: " + player.facing);
 				if(player.facing > angleToPlayer - (PI / 4) && player.facing < angleToPlayer + (PI / 4)) {
-					this.runFrames = 22;
-					console.log("Running!");
+					this.runFrames = 32;
 				}else {
 					if(this.character.attackFrames <= 0 && this.attackStart <= millis() - 700) {
 						this.attackStart = millis();
@@ -231,13 +236,13 @@ class npc {
 
 class character {
 	//All Characters should use this base
-	constructor(name, sprite, spriteLocation, canMelee, meleeDamage, startVector, xSize, ySize, maxSpeed, maxHealth, shouldCameraFollow) {
+	constructor(name, sprite, spriteLocation, canMelee, damage, startVector, xSize, ySize, maxSpeed, maxHealth, shouldCameraFollow, collisionMethod) {
 		this.name = name;
 		this.sprite = sprite;
 		this.spriteLocation = spriteLocation;
 		this.canMelee = canMelee;
 		this.doingMelee = false;
-		this.meleeDamage = meleeDamage;
+		this.meleeDamage = damage;
 		this.attackFrames = 0;
 		this.maxSpeed = maxSpeed;
 		this.xSize = xSize;
@@ -248,9 +253,10 @@ class character {
 		this.facing = 0;
 		this.hurtbox = null;
 		this.health = maxHealth;
+		this.maxHealth = maxHealth;
 
 		//character hitbox
-		this.hitbox = new hitbox(this.pos.x - (xSize/2) + backgroundOffsetX, this.pos.y - (ySize/2) + backgroundOffsetY, xSize, ySize, false, true, this, false, baseCollision);
+		this.hitbox = new hitbox(this.pos.x - (xSize/2) + backgroundOffsetX, this.pos.y - (ySize/2) + backgroundOffsetY, xSize, ySize, false, true, this, false, collisionMethod);
 		//should the camera follow this character
 		this.shouldCameraFollow = shouldCameraFollow;
 	}
@@ -277,12 +283,24 @@ class character {
 		this.momentum.limit(this.maxSpeed);
 	}
 
+	damage(amount) {
+		this.health -= amount;
+	}
+
+	heal(amount) {
+		if(this.health + amount <= this.maxHealth) {
+			this.health += amount;
+		}else {
+			this.health = this.maxHealth;
+		}
+	}
+
 	defeated() {
 		this.hitbox.delete();
 		if(this.hurtbox != null) {
 			this.hurtbox.delete();
 		}
-
+		delete this;
 	}
 
 	performAttack() {
@@ -295,10 +313,16 @@ class character {
 				//IMPORTANT: Here we are passing a function as a parameter. Check hurtbox#checkCollision() for details on calling this 
 				function(collisionHitbox) {
 					if(collisionHitbox.isCharacterHitbox) {
-						console.log("Hit " + collisionHitbox.character.name + "!");
-						collisionHitbox.character.health -= this.meleeDamage;
+						collisionHitbox.character.damage(hitboxes[this.attachedHitboxIndex].character.meleeDamage);
 						if(collisionHitbox.character.health <= 0) {
 							collisionHitbox.character.defeated();
+							collisionHitbox.character.pos.x = -24000;
+							collisionHitbox.character.pos.y = -24000;
+
+							if(collisionHitbox.character === player) {
+								gameLost = true;
+							}
+
 							return;
 						}
 					}
@@ -335,6 +359,10 @@ class gameCamera {
 			this.x = x;
 			this.y = y;
 			for(let i = 0; i < hitboxes.length; i++) {
+				if(hitboxes[i] == null) {
+					continue;
+				}
+
 				hitboxes[i].setHitboxLoc(hitboxes[i].x + backgroundOffsetX, hitboxes[i].y + backgroundOffsetY);
 
 				if(hitboxes[i].isCharacterHitbox) {
@@ -359,7 +387,7 @@ const dKey = 68;
 const spaceKey = 32;
 
 //use canvas size / 2 for x and y
-const mainCamera = new gameCamera(1536/2, 864/2);
+const mainCamera = new gameCamera(1500/2, 990/2);
 
 let debugMode = false;
 
@@ -386,19 +414,38 @@ let baseCollision = function(collisionHitbox, direction) {
 		}
 	}
 
+let npcCollision = function(collisionHitbox, direction) {
+	//We want to check if the collided hitbox is used for a character and if both are unpassable. If so, we need to modify character movement
+		if(collisionHitbox.isCharacterHitbox && !this.canPass && !collisionHitbox.canPass) {
+			//If we're running into the top or bottom, cancel the y movement, otherwise we're running into the left or right sides and need to cancel the x movement
+			if(direction == TOP_SIDE || direction == BOTTOM_SIDE) {
+				collisionHitbox.character.pos.add(0, (0-collisionHitbox.character.momentum.y));
+				collisionHitbox.character.momentum.set(collisionHitbox.character.momentum.x, 0-(collisionHitbox.character.momentum.y / 2));
+			}else {
+				collisionHitbox.character.pos.add((0-collisionHitbox.character.momentum.x), 0);
+				collisionHitbox.character.momentum.set(0-(collisionHitbox.character.momentum.x / 2), collisionHitbox.character.momentum.y);
+			}
+		}
+	}
+
 //the player object
-let player = new character("Player", -1, -1, true, 7, new p5.Vector(150, 150), 50, 50, 4.0, 430, true);
+let player = new character("Player", -1, -1, true, 7, new p5.Vector(520, 250), 50, 50, 4.0, 430, true, baseCollision);
 let wall1 = new hitbox(-200, -200, 100, 1000, false, false, null, true, baseCollision);
 let wall2 = new hitbox(1200, -200, 100, 1000, false, false, null, true, baseCollision);
 let wall3 = new hitbox(-200, -300, 1500, 100, false, false, null, true, baseCollision);
 let wall4 = new hitbox(-200, 800, 1500, 100, false, false, null, true, baseCollision);
-let enemy1 = new npc(new character("enemy1", -1, -1, true, 3, new p5.Vector(300, 180), 30, 30, 2.5, 85, false), false).setEnemyParams(90);
 
 //currently unused
 let gameDifficulty = "easy";
 
+let shouldSpawnEnemies = true;
+let waveNum = 1;
+let enemiesPerWave = 2;
+let gameLost = false;
+let mills = 0;
+
 function setup() {
-	let cnv = createCanvas(1536, 864);
+	let cnv = createCanvas(1500, 990);
 	cnv.mousePressed(onMouseClick);
 	colorMode(RGB, 255);
 	frameRate(60);
@@ -407,7 +454,7 @@ function setup() {
 }
 
 function draw() {
-	background(56, 102, 31);
+	background(36, 82, 36);
 	//Check if the player should be moving
   	checkShouldMove();
 
@@ -417,25 +464,81 @@ function draw() {
  	wall3.drawStaticHitbox();
  	wall4.drawStaticHitbox();
 
-
   	//drawing the "player"
  	ellipse(player.pos.x + 25 + backgroundOffsetX, player.pos.y + 25 + backgroundOffsetY, 50, 50);
 
+ 	if(shouldSpawnEnemies) {
+ 		let seconds = 5;
+ 		
+ 		if(seconds + mills - (millis() / 1000) > 0) {
+ 			preWaveTimer((seconds + mills - (millis() / 1000)).toPrecision(2));
+ 			player.heal(0.5);
+ 		}else if(seconds - (millis() / 1000) <= 0) {
+ 			let rand = random(-1, 3);
+ 			let anchorX = 520 + backgroundOffsetX;
+ 			let anchorY = 250 + backgroundOffsetY;
+ 			for(let i = 0; i < enemiesPerWave + rand; i++) {
+ 				new npc(new character("enemy" + i, -1, -1, true, (waveNum*1.5) + 2, new p5.Vector(anchorX + random(-401 + (5*i), 401 - (5*i)), anchorY + random(-251 + (5*i), 251 - (5*i))), 30, 30, 2.5, (waveNum*1.5) + 80 + random(-25, 26), false, npcCollision), false).setEnemyParams(90);
+ 			}
+ 			waveNum++;
+ 			shouldSpawnEnemies = false;
+ 		}
+ 	}
+
+ 	if(gameLost) {
+ 		push();
+ 		textSize(48);
+ 		fill(155, 20, 225);
+ 		text("Game Over! You beat " + (waveNum - 2) + " waves of enemies!", (width / 2) - 400, height / 2);
+ 		pop();
+ 		//Show loss screen here
+ 	}else {
+ 		push();
+ 		textSize(28);
+ 		fill(20, 12, 12);
+ 		text("Health:", 40, 40);
+ 		rect(130, 16, 330, 46);
+ 		fill(255, 25, 35);
+ 		text("Health:", 38, 38);
+ 		rect(130, 16, 130 + map(player.health, 0, player.maxHealth, 0, 200), 46);
+ 		pop();
+ 	}
+ 	
+
  	//For each existing hitbox, check if it's colliding with anything
  	for(let i = 0; i < hitboxes.length; i++) {
- 		if(hitboxes[i] != null) {
- 			hitboxes[i].checkCollision();
+ 		if(hitboxes[i] == null) {
+ 			continue;
+ 		}
 
- 			if(hitboxes[i].isCharacterHitbox) {
- 				hitboxes[i].character.performAttack();
- 			}
+ 		hitboxes[i].checkCollision();
+
+ 		if(hitboxes[i].isCharacterHitbox) {
+ 			hitboxes[i].character.performAttack();
  		}
  		
  	}
 
  	for(let i = 0; i < hurtboxes.length; i++) {
- 		if(hurtboxes[i] != null) {
- 			hurtboxes[i].checkCollision();
+ 		if(hurtboxes[i] == null) {
+ 			continue;
+ 		}
+ 		hurtboxes[i].checkCollision();
+ 	}
+
+ 	if(!gameLost && !shouldSpawnEnemies) {
+ 		let numNulls = 0;
+ 		for(let i = 0; i < npcs.length; i++) {
+ 			if(npcs[i] == null || npcs[i] == undefined) {
+ 				numNulls++;
+ 				if(numNulls == npcs.length - 1) {
+ 					shouldSpawnEnemies = true;
+ 					mills = millis() / 1000;
+ 				}
+ 				continue;
+ 			}else {
+ 				break;
+ 			}
  		}
  	}
 
@@ -445,10 +548,25 @@ function draw() {
  		}
 
  		if(!npcs[i].isFriendly) {
+ 			if(npcs[i].character.hitbox == null) {
+ 				npcs[i].delete();
+ 			}
+
+ 			for(let j = 0; j < npcs.length; j++) {
+ 				if(npcs[j] == null || i == j) {
+ 					continue;
+ 				}
+
+ 				if(npcs[i].character.pos.dist(npcs[j].character.pos) <= 45) {
+ 					npcs[j].runFrames = 20;
+ 				}
+ 			}
+
  			npcs[i].drawEnemyAsCircle();
  			npcs[i].update();
  		}
  	}
+ 	numNulls = 0;
 
  	if(debugMode) {
  		push();
@@ -479,28 +597,38 @@ function onMouseClick() {
 	//Write canRangedAttack code here :)
 }
 
+function preWaveTimer(time) {
+	push();
+	fill(155, 20, 225);
+	textSize(26);
+	text("Enemies Spawn in " + time, 530, 180);
+	pop();
+}
+
 function checkShouldMove() {
-	//if the player has either W, S, A, or D held down, we want to move the player character
-	if(keyIsDown(wKey)) {
-		player.addMomentum(0, -0.1);
-	}
-	if(keyIsDown(sKey)) {
-		player.addMomentum(0, 0.1);
-	}
-	if(keyIsDown(aKey)) {
-		player.addMomentum(-0.1, 0);
-	}
-	if(keyIsDown(dKey)) {
-		player.addMomentum(0.1, 0);
-	}
+	if(!gameLost) {
+		//if the player has either W, S, A, or D held down, we want to move the player character
+		if(keyIsDown(wKey)) {
+			player.addMomentum(0, -0.1);
+		}
+		if(keyIsDown(sKey)) {
+			player.addMomentum(0, 0.1);
+		}
+		if(keyIsDown(aKey)) {
+			player.addMomentum(-0.1, 0);
+		}
+		if(keyIsDown(dKey)) {
+			player.addMomentum(0.1, 0);
+		}
 
-	//We call move from here instead of above because if called above and the player is holding 2 keys down it will call move twice, speeding them up and ignoring hitboxes.
-	if(keyIsDown(wKey) || keyIsDown(sKey) || keyIsDown(aKey) || keyIsDown(dKey)) {
-		player.move(player.momentum.x, player.momentum.y);
-	}
+		//We call move from here instead of above because if called above and the player is holding 2 keys down it will call move twice, speeding them up and ignoring hitboxes.
+		if(keyIsDown(wKey) || keyIsDown(sKey) || keyIsDown(aKey) || keyIsDown(dKey)) {
+			player.move(player.momentum.x, player.momentum.y);
+		}
 
-	//If momentum isn't 0 and the player isn't holding W, S, A, or D, we want to slow the player down
-	if( (player.momentum.x > 0.1 || player.momentum.x < -0.1 || player.momentum.y > 0.1 || player.momentum.y < -0.1) && !keyIsDown(wKey) && !keyIsDown(sKey) && !keyIsDown(aKey) && !keyIsDown(dKey)) {
-		player.slowDown();
+		//If momentum isn't 0 and the player isn't holding W, S, A, or D, we want to slow the player down
+		if( (player.momentum.x > 0.1 || player.momentum.x < -0.1 || player.momentum.y > 0.1 || player.momentum.y < -0.1) && !keyIsDown(wKey) && !keyIsDown(sKey) && !keyIsDown(aKey) && !keyIsDown(dKey)) {
+			player.slowDown();
+		}
 	}
 }
