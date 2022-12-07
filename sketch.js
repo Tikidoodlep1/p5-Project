@@ -25,6 +25,14 @@ class hitbox {
 		this.y = y;
 	}
 
+	drawStaticHitbox() {
+		push();
+		noStroke();
+		fill(255, 255, 255, 255);
+		rect(this.x, this.y, this.x + this.width, this.y + this.height);
+		pop();
+	}
+
 	checkCollision() {
 		if(debugMode) {
 			push();
@@ -87,7 +95,7 @@ class hurtbox {
 		this.attachedHitboxIndex = attachedHitboxIndex;
 		this.onCollide = onCollide;
 		this.index = hurtboxes.length;
-		this.hurtboxes[index] = this;
+		hurtboxes[this.index] = this;
 	}
 
 	setLoc(x, y) {
@@ -115,6 +123,11 @@ class hurtbox {
 			}
 		}
 	}
+
+	//Remove this hurtbox from the hitboxes array
+	delete() {
+		hurtboxes[this.index] = null;
+	}
 }
 
 class projectile {
@@ -140,39 +153,91 @@ class npc {
 		this.character = character;
 		this.isFriendly = isFriendly;
 		this.idealDist;
-		this.path;
+		this.npcIndex = npcs.length;
+		npcs[npcs.length] = this;
 	}
 
 	setEnemyParams(idealDist) {
 		this.idealDist = idealDist;
 		this.angle;
+		this.attackStart = 0;
+		this.runFrames = 0;
 		return this;
 	}
 
+	drawEnemyAsCircle() {
+		push();
+		fill(200, 0, 55, 255);
+		ellipse(this.character.pos.x + (this.character.xSize / 2) + backgroundOffsetX, this.character.pos.y + (this.character.ySize / 2) + backgroundOffsetY, this.character.xSize, this.character.ySize);
+		pop();
+	}
+
+	//Remove this npc from the npcs array
+	delete() {
+		npcs[this.index] = null;
+	}
+
 	update() {
+		if(this == null) {
+			return;
+		}
+
 		if(!this.isFriendly) {
-			let angleToPlayer = atan( (this.character.pos.y - player.pos.y) / (this.character.pos.x - player.pos.x) );
-			if(angleToPlayer > PI/2 && angleToPlayer < 0) {
-				this.character.momentum.add(0.1, 0.0);
-			}else if(angleToPlayer > PI/2 && angleToPlayer < 0) {
-				this.character.momentum.add(0.1, 0.0);
+			let angleToPlayer = atan2( (this.character.pos.y - player.pos.y), (this.character.pos.x - player.pos.x) );
+			this.angle = p5.Vector.fromAngle(angleToPlayer);
+			this.angle.normalize();
+			this.character.addMomentum(this.angle.x / 10, this.angle.y / 10);
+			let playerDist = dist(this.character.pos.x + (this.character.xSize / 2), this.character.pos.y + (this.character.ySize / 2), player.pos.x + (player.xSize / 2), player.pos.y + (player.ySize / 2));
+
+			if(playerDist > 2000) {
+				this.character.defeated();
+				this.delete();
+				return;
 			}
-			
-			this.character.move()
+
+			if(playerDist <= this.idealDist) {
+				console.log("Angle minus: " + (angleToPlayer - (PI / 2)) + ", Angle plus: " + (angleToPlayer + (PI / 2)) + ", Facing: " + player.facing);
+				if(player.facing > angleToPlayer - (PI / 4) && player.facing < angleToPlayer + (PI / 4)) {
+					this.runFrames = 22;
+					console.log("Running!");
+				}else {
+					if(this.character.attackFrames <= 0 && this.attackStart <= millis() - 700) {
+						this.attackStart = millis();
+						this.character.doingMelee = true;
+						this.character.attackFrames = 9;
+					}
+				}
+
+				if(this.runFrames > 0) {
+					this.character.addMomentum(-this.angle.x / 10, -this.angle.y / 10);
+					this.character.move(this.character.momentum.x, this.character.momentum.y);
+					this.runFrames--;
+				}
+
+			}else {
+				if(this.runFrames > 0) {
+					this.character.addMomentum(-this.angle.x / 10, -this.angle.y / 10);
+					this.character.move(this.character.momentum.x, this.character.momentum.y);
+					this.runFrames--;
+				}else {
+					this.character.move(-this.character.momentum.x, -this.character.momentum.y);
+				}
+			}
+
+
 		}
 	}
 }
 
 class character {
 	//All Characters should use this base
-	constructor(name, sprite, spriteLocation, canMelee, canRange, startVector, xSize, ySize, maxSpeed, shouldCameraFollow) {
+	constructor(name, sprite, spriteLocation, canMelee, meleeDamage, startVector, xSize, ySize, maxSpeed, maxHealth, shouldCameraFollow) {
 		this.name = name;
 		this.sprite = sprite;
 		this.spriteLocation = spriteLocation;
 		this.canMelee = canMelee;
-		this.canRange = canRange;
 		this.doingMelee = false;
-		this.doingRanged = false;
+		this.meleeDamage = meleeDamage;
 		this.attackFrames = 0;
 		this.maxSpeed = maxSpeed;
 		this.xSize = xSize;
@@ -182,6 +247,7 @@ class character {
 		this.momentum = new p5.Vector(0, 0);
 		this.facing = 0;
 		this.hurtbox = null;
+		this.health = maxHealth;
 
 		//character hitbox
 		this.hitbox = new hitbox(this.pos.x - (xSize/2) + backgroundOffsetX, this.pos.y - (ySize/2) + backgroundOffsetY, xSize, ySize, false, true, this, false, baseCollision);
@@ -192,8 +258,6 @@ class character {
 	move(x, y) {
 		//set the absolute location of the hitbox, then move the character pos
 		this.hitbox.setHitboxLoc(this.pos.x + x, this.pos.y + y);
-		this.hitbox.startX = this.pos.x + x;
-		this.hitbox.startY = this.pos.y + y;
 		this.facing = atan2(this.pos.x, this.pos.y) - atan2(x, y);
 		this.pos.add(x, y);
 		if(this.shouldCameraFollow) {
@@ -203,14 +267,22 @@ class character {
 
 	slowDown() {
 		//get the direction the character was heading, then multiply that vector by the momentum. Then move the character and make the momentum -1/8 of it's previous value.
-		this.move(this.momentum.x, this.momentum.y);
 		this.momentum.add((0-this.momentum.x)/8, (0-this.momentum.y)/8);
+		this.move(this.momentum.x, this.momentum.y);
 	}
 
 	//Momentum is used to make movement look more realistic, so you speed up to a max speed and slow down from a max speed
 	addMomentum(x, y) {
 		this.momentum.add(x, y);
 		this.momentum.limit(this.maxSpeed);
+	}
+
+	defeated() {
+		this.hitbox.delete();
+		if(this.hurtbox != null) {
+			this.hurtbox.delete();
+		}
+
 	}
 
 	performAttack() {
@@ -224,6 +296,11 @@ class character {
 				function(collisionHitbox) {
 					if(collisionHitbox.isCharacterHitbox) {
 						console.log("Hit " + collisionHitbox.character.name + "!");
+						collisionHitbox.character.health -= this.meleeDamage;
+						if(collisionHitbox.character.health <= 0) {
+							collisionHitbox.character.defeated();
+							return;
+						}
 					}
 				});
 			}
@@ -237,6 +314,7 @@ class character {
 			this.attackFrames--;
 			if(this.attackFrames <= 0) {
 				this.doingMelee = false;
+				this.hurtbox.delete();
 				this.hurtbox = null;
 			}
 			
@@ -257,7 +335,11 @@ class gameCamera {
 			this.x = x;
 			this.y = y;
 			for(let i = 0; i < hitboxes.length; i++) {
-				hitboxes[i].setHitboxLoc(hitboxes[i].startX + backgroundOffsetX, hitboxes[i].startY + backgroundOffsetY);
+				hitboxes[i].setHitboxLoc(hitboxes[i].x + backgroundOffsetX, hitboxes[i].y + backgroundOffsetY);
+
+				if(hitboxes[i].isCharacterHitbox) {
+					hitboxes[i].character.pos.set(hitboxes[i].character.pos.x + backgroundOffsetX, hitboxes[i].character.pos.y + backgroundOffsetY);
+				}
 			}
 		}
 	}
@@ -284,6 +366,8 @@ let debugMode = false;
 //Keep an array of every existing hitbox for checking collision. If a hitbox gets deleted, it MUST be removed from this.
 let hitboxes = [];
 let hurtboxes = [];
+let npcs = [];
+
 //These variables should be used for every object X and Y position to account for camera movement
 let backgroundOffsetX = 0;
 let backgroundOffsetY = 0;
@@ -293,19 +377,22 @@ let baseCollision = function(collisionHitbox, direction) {
 		if(collisionHitbox.isCharacterHitbox && !this.canPass && !collisionHitbox.canPass) {
 			//If we're running into the top or bottom, cancel the y movement, otherwise we're running into the left or right sides and need to cancel the x movement
 			if(direction == TOP_SIDE || direction == BOTTOM_SIDE) {
-				collisionHitbox.character.pos.add(0, 0-collisionHitbox.character.momentum.y);
+				collisionHitbox.character.pos.add(0, (0-collisionHitbox.character.momentum.y) );
 				collisionHitbox.character.momentum.set(collisionHitbox.character.momentum.x, 0);
 			}else {
-				collisionHitbox.character.pos.add(0-collisionHitbox.character.momentum.x, 0);
+				collisionHitbox.character.pos.add((0-collisionHitbox.character.momentum.x) , 0);
 				collisionHitbox.character.momentum.set(0, collisionHitbox.character.momentum.y);
 			}
 		}
 	}
 
 //the player object
-let player = new character("Player", -1, -1, true, true, new p5.Vector(150, 150), 50, 50, 4.0, true);
-let door = new hitbox(400 + backgroundOffsetX, 400 + backgroundOffsetY, 400, 400, false, false, null, true, baseCollision);
-let enemy1 = new npc(new character("enemy1", -1, -1, false, true, new p5.Vector(300, 180), 100, 100, 0.0, false), false).setEnemyParams(80);
+let player = new character("Player", -1, -1, true, 7, new p5.Vector(150, 150), 50, 50, 4.0, 430, true);
+let wall1 = new hitbox(-200, -200, 100, 1000, false, false, null, true, baseCollision);
+let wall2 = new hitbox(1200, -200, 100, 1000, false, false, null, true, baseCollision);
+let wall3 = new hitbox(-200, -300, 1500, 100, false, false, null, true, baseCollision);
+let wall4 = new hitbox(-200, 800, 1500, 100, false, false, null, true, baseCollision);
+let enemy1 = new npc(new character("enemy1", -1, -1, true, 3, new p5.Vector(300, 180), 30, 30, 2.5, 85, false), false).setEnemyParams(90);
 
 //currently unused
 let gameDifficulty = "easy";
@@ -323,23 +410,44 @@ function draw() {
 	background(56, 102, 31);
 	//Check if the player should be moving
   	checkShouldMove();
-  	//This shows the "door" hitbox for collision testing
- 	rect(400 + backgroundOffsetX, 400 + backgroundOffsetY, 800 + backgroundOffsetX, 800 + backgroundOffsetY);
+
+ 	//Arena Bounds
+ 	wall1.drawStaticHitbox();
+ 	wall2.drawStaticHitbox();
+ 	wall3.drawStaticHitbox();
+ 	wall4.drawStaticHitbox();
+
+
   	//drawing the "player"
  	ellipse(player.pos.x + 25 + backgroundOffsetX, player.pos.y + 25 + backgroundOffsetY, 50, 50);
 
- 	ellipse(enemy1.character.pos.x + backgroundOffsetX, enemy1.character.pos.y + backgroundOffsetY, 100, 100);
  	//For each existing hitbox, check if it's colliding with anything
  	for(let i = 0; i < hitboxes.length; i++) {
- 		hitboxes[i].checkCollision();
+ 		if(hitboxes[i] != null) {
+ 			hitboxes[i].checkCollision();
 
- 		if(hitboxes[i].isCharacterHitbox) {
- 			hitboxes[i].character.performAttack();
+ 			if(hitboxes[i].isCharacterHitbox) {
+ 				hitboxes[i].character.performAttack();
+ 			}
  		}
+ 		
  	}
 
  	for(let i = 0; i < hurtboxes.length; i++) {
- 		hurtboxes[i].checkCollision();
+ 		if(hurtboxes[i] != null) {
+ 			hurtboxes[i].checkCollision();
+ 		}
+ 	}
+
+ 	for(let i = 0; i < npcs.length; i++) {
+ 		if(npcs[i] == null) {
+ 			continue;
+ 		}
+
+ 		if(!npcs[i].isFriendly) {
+ 			npcs[i].drawEnemyAsCircle();
+ 			npcs[i].update();
+ 		}
  	}
 
  	if(debugMode) {
@@ -347,6 +455,9 @@ function draw() {
  		textSize(42);
  		fill(255, 255, 0);
  		text("Debug Mode On", width / 2 - 100, 60);
+
+ 		strokeWeight(5);
+ 		point(player.pos.x, player.pos.y);
  		pop();
  	}
 }
